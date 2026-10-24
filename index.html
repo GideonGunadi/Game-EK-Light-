@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Find the Magic Note 🔦</title>
+<style>
+:root{color-scheme:dark}
+html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Comic Sans MS","Chalkboard SE",system-ui,sans-serif;color:#fff;user-select:none;-webkit-user-select:none}
+canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;touch-action:none}
+#top{position:absolute;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 0;display:flex;justify-content:space-between;font-size:18px;pointer-events:none;text-shadow:0 2px 4px #000}
+#bar{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);left:0;right:0;display:flex;gap:12px;justify-content:center}
+button{font:inherit;font-size:18px;padding:10px 18px;border-radius:30px;border:3px solid #ffd23f;background:#222a;color:#fff;cursor:pointer}
+button.on{background:#ffd23f;color:#222}
+#ov{position:absolute;inset:0;background:#000d;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;gap:12px}
+#ov h1{margin:0;font-size:clamp(28px,6vw,52px);color:#ffd23f}
+#ov p{margin:0;max-width:520px;font-size:clamp(16px,2.5vw,20px);line-height:1.5}
+#ov button{font-size:24px;background:#ffd23f;color:#222;margin-top:8px}
+.hide{display:none!important}
+</style></head><body>
+<canvas id="c"></canvas>
+<div id="top"><span>🔍 Find the sticky note “light”!</span><span id="tm">0 sec</span></div>
+<div id="bar"><button id="bf" class="on">🔦 Flashlight: ON (F)</button><button id="bl">💡 Room light: OFF (L)</button></div>
+<div id="ov"><h1>🔦 Find the Magic Note!</h1>
+<p>The room is super dark! Move your <b>mouse</b> to aim the flashlight. Move the mouse near the left or right edge of the screen to turn your head. There is one sticky note on the board that says <b>“light”</b>. Find it and click it!</p>
+<p>Press <b>F</b> = flashlight, <b>L</b> = room light. The flashlight starts off, so turn it on first!</p>
+<button id="go">Start Playing!</button></div>
+<script>
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const ov=document.createElement('canvas'),octx=ov.getContext('2d');
+const world=document.createElement('canvas'),Q=1.5,WW=2000,WH=720;
+world.width=WW*Q;world.height=WH*Q;
+let W,H,S,cam=0,mx=0,my=0,fl=true,room=false,playing=false,won=false,t0=0,items=[],note={},dots=[],parts=[];
+const cols=['#ef476f','#ffd166','#06d6a0','#118ab2','#8338ec','#ff9f1c','#4cc9f0','#f72585'];
+const R=(a,b)=>a+Math.random()*(b-a);
+function resize(){W=cv.width=ov.width=innerWidth;H=cv.height=ov.height=innerHeight;S=H/WH;cam=Math.max(0,Math.min(cam,WW*S-W))}
+addEventListener('resize',resize);resize();mx=W/2;my=H/2;cam=(WW*S-W)/2;
+
+function drawItem(c,it){c.save();c.translate(it.x,it.y);c.rotate(it.r);const s=it.s;c.fillStyle=it.c;c.shadowColor='#0005';c.shadowBlur=4;c.shadowOffsetY=2;
+switch(it.k){
+case'star':c.beginPath();for(let i=0;i<10;i++){const a=i*Math.PI/5-Math.PI/2,r=i%2?s*.25:s*.55;c.lineTo(Math.cos(a)*r,Math.sin(a)*r)}c.closePath();c.fill();break;
+case'heart':c.beginPath();c.moveTo(0,s*.4);c.bezierCurveTo(-s*.8,-s*.1,-s*.3,-s*.6,0,-s*.2);c.bezierCurveTo(s*.3,-s*.6,s*.8,-s*.1,0,s*.4);c.fill();break;
+case'circle':c.beginPath();c.arc(0,0,s*.4,0,7);c.fill();break;
+case'tri':c.beginPath();c.moveTo(0,-s*.5);c.lineTo(s*.5,s*.4);c.lineTo(-s*.5,s*.4);c.fill();break;
+case'balloon':c.beginPath();c.ellipse(0,-s*.1,s*.3,s*.4,0,0,7);c.fill();c.strokeStyle='#eee';c.lineWidth=2;c.beginPath();c.moveTo(0,s*.3);c.quadraticCurveTo(8,s*.5,0,s*.7);c.stroke();break;
+case'fish':c.beginPath();c.ellipse(0,0,s*.4,s*.25,0,0,7);c.fill();c.beginPath();c.moveTo(s*.35,0);c.lineTo(s*.6,-s*.2);c.lineTo(s*.6,s*.2);c.fill();c.fillStyle='#000';c.beginPath();c.arc(-s*.2,-s*.05,3,0,7);c.fill();break;
+case'flower':for(let i=0;i<5;i++){c.beginPath();c.arc(Math.cos(i*1.256)*s*.22,Math.sin(i*1.256)*s*.22,s*.16,0,7);c.fill()}c.fillStyle='#ffd23f';c.beginPath();c.arc(0,0,s*.13,0,7);c.fill();break;
+case'house':c.fillRect(-s*.35,-s*.1,s*.7,s*.5);c.fillStyle='#b5442e';c.beginPath();c.moveTo(-s*.45,-s*.1);c.lineTo(0,-s*.5);c.lineTo(s*.45,-s*.1);c.fill();c.fillStyle='#fff';c.fillRect(-s*.08,s*.12,s*.16,s*.28);break;
+case'sq':c.fillRect(-s*.35,-s*.35,s*.7,s*.7);break;
+case'cloud':c.beginPath();c.arc(-s*.2,0,s*.2,0,7);c.arc(0,-s*.1,s*.25,0,7);c.arc(s*.22,0,s*.2,0,7);c.fill();c.fillRect(-s*.2,0,s*.42,s*.2);break;
+case'smile':c.beginPath();c.arc(0,0,s*.4,0,7);c.fill();c.shadowColor='transparent';c.fillStyle='#222';c.beginPath();c.arc(-s*.14,-s*.1,3,0,7);c.arc(s*.14,-s*.1,3,0,7);c.fill();c.strokeStyle='#222';c.lineWidth=3;c.beginPath();c.arc(0,s*.02,s*.2,.2,Math.PI-.2);c.stroke();break;
+case'ring':c.strokeStyle=it.c;c.lineWidth=s*.2;c.beginPath();c.arc(0,0,s*.3,0,7);c.stroke();break;
+case'paper':c.fillStyle='#f4f1e8';c.fillRect(-s*.4,-s*.5,s*.8,s);c.shadowColor='transparent';c.strokeStyle=it.c;c.lineWidth=3;c.beginPath();c.moveTo(-s*.25,-s*.2);c.lineTo(s*.25,-s*.2);c.moveTo(-s*.25,0);c.lineTo(s*.2,0);c.moveTo(-s*.25,s*.2);c.lineTo(s*.1,s*.2);c.stroke();break;
+}c.restore()}
+
+function drawNote(c){c.save();c.translate(note.x,note.y);c.rotate(-.06);c.shadowColor='#0006';c.shadowBlur=5;c.shadowOffsetY=3;c.fillStyle='#fff176';c.fillRect(-32,-29,64,58);c.shadowColor='transparent';c.fillStyle='#333';c.font='bold 22px "Comic Sans MS",cursive,sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText('light',0,2);c.restore()}
+
+function build(){
+ const kinds=['star','heart','circle','tri','balloon','fish','flower','house','sq','cloud','paper','smile','ring'];
+ items=[];dots=[];
+ for(let gx=0;gx<20;gx++)for(let gy=0;gy<7;gy++){const i=items.length;items.push({k:kinds[i%kinds.length],x:300+gx*74+R(-14,14),y:115+gy*72+R(-14,14),s:R(42,68),r:R(-.6,.6),c:cols[(i*3)%cols.length]})}
+ for(let i=0;i<50;i++)items.push({k:kinds[i%kinds.length],x:R(300,1700),y:R(110,550),s:R(34,60),r:R(-.6,.6),c:cols[(i*5)%cols.length]});
+ items.sort(()=>Math.random()-.5);
+ note={x:R(340,1660),y:R(140,530)};
+ const c=world.getContext('2d');c.setTransform(Q,0,0,Q,0,0);
+ let g=c.createLinearGradient(0,0,0,WH);g.addColorStop(0,'#5b6b8c');g.addColorStop(1,'#3d4766');c.fillStyle=g;c.fillRect(0,0,WW,WH);
+ c.fillStyle='#6b4a32';c.fillRect(0,640,WW,80);
+ c.fillStyle='#5a3a1e';c.fillRect(240,60,1520,540);
+ c.fillStyle='#c89a62';c.fillRect(260,80,1480,500);
+ for(let i=0;i<600;i++){c.fillStyle=Math.random()<.5?'#a97c48':'#dcb27a';c.fillRect(R(262,1736),R(82,576),3,3)}
+ c.beginPath();c.arc(130,200,60,0,7);c.fillStyle='#eee';c.fill();c.strokeStyle='#333';c.lineWidth=6;c.stroke();
+ c.beginPath();c.moveTo(130,200);c.lineTo(130,160);c.moveTo(130,200);c.lineTo(160,210);c.stroke();
+ c.fillStyle='#ffd23f';c.fillRect(1840,150,110,150);c.fillStyle='#ef476f';c.beginPath();c.arc(1895,225,30,0,7);c.fill();
+ const idx=items.length-4;
+ items.forEach((it,i)=>{if(i===idx)drawNote(c);drawItem(c,it)});
+}
+
+function setBtns(){bf.className=fl?'on':'';bf.textContent='🔦 Flashlight: '+(fl?'ON':'OFF')+' (F)';bl.className=room?'on':'';bl.textContent='💡 Room light: '+(room?'ON':'OFF')+' (L)'}
+const bf=document.getElementById('bf'),bl=document.getElementById('bl');
+function togF(){fl=!fl;setBtns()}function togL(){room=!room;setBtns()}
+bf.onclick=e=>{togF();e.stopPropagation()};bl.onclick=e=>{togL();e.stopPropagation()};
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(k==='f')togF();if(k==='l')togL()});
+cv.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY});
+cv.addEventListener('pointerdown',e=>{
+ mx=e.clientX;my=e.clientY;if(!playing||won)return;
+ const wx=(mx+cam)/S,wy=my/S;
+ const r=Math.min(W,H)*.2/S;
+ const visible=room||(fl&&Math.hypot(wx-note.x,wy-note.y)<r*.95);
+ if(visible&&Math.abs(wx-note.x)<34&&Math.abs(wy-note.y)<31)win();
+});
+
+function win(){won=true;room=true;setBtns();const sec=Math.round((performance.now()-t0)/1000);
+ for(let i=0;i<120;i++)parts.push({x:W/2,y:H/2,vx:R(-9,9),vy:R(-14,-2),c:cols[i%cols.length],l:120});
+ const o=document.getElementById('ov');o.classList.remove('hide');
+ o.innerHTML='<h1>🎉 Hooray! You found it!</h1><p>You found the “light” sticky note in <b>'+sec+' seconds</b>!</p><button id="again">Play Again</button>';
+ document.getElementById('again').onclick=start;}
+
+function start(){won=false;playing=true;room=false;fl=false;parts=[];setBtns();build();t0=performance.now();document.getElementById('ov').classList.add('hide')}
+document.getElementById('go').onclick=start;
+build();
+
+function frame(){
+ if(playing&&!won)document.getElementById('tm').textContent=Math.round((performance.now()-t0)/1000)+' sec';
+ const e=W*.22;
+ if(mx<e)cam-=(e-mx)/e*18;else if(mx>W-e)cam+=(mx-(W-e))/e*18;
+ cam=Math.max(0,Math.min(cam,WW*S-W));
+ ctx.drawImage(world,cam/S*Q,0,W/S*Q,WH*Q,0,0,W,H);
+ if(!room){
+  octx.globalCompositeOperation='source-over';octx.clearRect(0,0,W,H);octx.fillStyle='rgba(0,0,0,.97)';octx.fillRect(0,0,W,H);
+  if(fl){const r=Math.min(W,H)*.2;octx.globalCompositeOperation='destination-out';
+   const g=octx.createRadialGradient(mx,my,r*.08,mx,my,r);g.addColorStop(0,'rgba(0,0,0,1)');g.addColorStop(.6,'rgba(0,0,0,.85)');g.addColorStop(1,'rgba(0,0,0,0)');
+   octx.fillStyle=g;octx.beginPath();octx.arc(mx,my,r,0,7);octx.fill();}
+  ctx.drawImage(ov,0,0);
+  if(fl){const r=Math.min(W,H)*.2;ctx.globalCompositeOperation='lighter';const g=ctx.createRadialGradient(mx,my,0,mx,my,r);g.addColorStop(0,'rgba(255,235,160,.14)');g.addColorStop(1,'rgba(255,235,160,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(mx,my,r,0,7);ctx.fill();ctx.globalCompositeOperation='source-over'}
+ }
+ parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=.4;p.l--;ctx.fillStyle=p.c;ctx.fillRect(p.x,p.y,8,8)});
+ parts=parts.filter(p=>p.l>0);
+ requestAnimationFrame(frame)}
+frame();
+</script></body></html>
